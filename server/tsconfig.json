@@ -1,0 +1,7 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": ["./**/*.ts", "../src/environment", "../src/lisp", "../src/agents", "../src/llm", "../src/workspace/workspace-host.ts"]
+}

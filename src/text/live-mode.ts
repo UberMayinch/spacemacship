@@ -5,17 +5,18 @@ import { KEY_STORAGE as GEMINI_KEY_STORAGE } from "../llm/decisions.ts"
 const KEY_FIELDS = { cerebras: CEREBRAS_KEY_STORAGE, gemini: GEMINI_KEY_STORAGE }
 
 /**
- * Sim plays simulated sources; flight calls the models. The sources are chosen when the page loads, so switching reloads it in the other mode.
- * Launching always asks for both API keys first, prefilled with the ones kept from last time; the dialog's submit button returns "live".
+ * Sim plays simulated sources; flight calls the models. Sources ask `isLive` on every call, so switching takes effect at once, without a reload;
+ * the URL keeps the mode for the next visit. Launching always asks for both API keys first, prefilled with the ones kept from last time;
+ * the dialog's submit button returns "live".
  */
-export function bindModeToggle(toggle: HTMLButtonElement, dialog: HTMLDialogElement, isLive: boolean) {
+export function bindModeToggle(toggle: HTMLButtonElement, dialog: HTMLDialogElement, onSwitch: (isLive: boolean) => void) {
   const form = dialog.querySelector("form")!
   const inputOf = (name: string) => form.elements.namedItem(name) as HTMLInputElement
-  toggle.setAttribute("aria-pressed", `${isLive}`)
-  toggle.querySelector("b")!.textContent = isLive ? "flight" : "sim"
+  let isLive = new URLSearchParams(location.search).get("live") === "true"
+  show()
 
   toggle.addEventListener("click", () => {
-    if (isLive) return reloadAs(false)
+    if (isLive) return switchTo(false)
     for (const [name, storageKey] of Object.entries(KEY_FIELDS)) inputOf(name).value = localStorage.getItem(storageKey) ?? ""
     dialog.showModal()
   })
@@ -24,13 +25,23 @@ export function bindModeToggle(toggle: HTMLButtonElement, dialog: HTMLDialogElem
     dialog.returnValue = ""
     if (choice !== "live") return
     for (const [name, storageKey] of Object.entries(KEY_FIELDS)) localStorage.setItem(storageKey, inputOf(name).value.trim())
-    reloadAs(true)
+    switchTo(true)
   })
-}
 
-function reloadAs(isLive: boolean) {
-  const url = new URL(location.href)
-  if (isLive) url.searchParams.set("live", "true")
-  else url.searchParams.delete("live")
-  location.assign(url)
+  return { isLive: () => isLive }
+
+  function switchTo(next: boolean) {
+    isLive = next
+    show()
+    const url = new URL(location.href)
+    if (isLive) url.searchParams.set("live", "true")
+    else url.searchParams.delete("live")
+    history.replaceState(null, "", url)
+    onSwitch(isLive)
+  }
+
+  function show() {
+    toggle.setAttribute("aria-pressed", `${isLive}`)
+    toggle.querySelector("b")!.textContent = isLive ? "flight" : "sim"
+  }
 }

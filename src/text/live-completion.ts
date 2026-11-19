@@ -34,7 +34,7 @@ const STEERED_REQUEST = { ...STORY_REQUEST, system: STEERED_SYSTEM_PROMPT }
 export const liveSource: TextSource = { expand: expandToStoryStart, complete: completeStory }
 
 /** Picks a random story opening that begins with the same words as `text`. */
-function expandToStoryStart(text: string) {
+export function expandToStoryStart(text: string) {
   const words = text.match(/\S+/g) ?? []
   const candidates = STORY_OPENINGS.filter((start) => {
     const startWords = start.split(/\s+/)
@@ -49,8 +49,13 @@ async function* completeStory(prefix: string, steering: Steering, signal: AbortS
 
   const isSteered = steering.leads.length > 0 || steering.controls.length > 0
   const request = isSteered ? { ...STEERED_REQUEST, user: steeredUserMessage(prefix, steering) } : { ...STORY_REQUEST, user: prefix }
+  yield* withoutEchoStream(prefix, streamCompletion({ ...request, apiKey, signal }))
+}
+
+/** Holds back the first words of `deltas` until it can drop any that echo the end of `prefix`, then passes the rest through. */
+export async function* withoutEchoStream(prefix: string, deltas: AsyncIterable<string>) {
   let head: string | undefined = ""
-  for await (const delta of streamCompletion({ ...request, apiKey, signal })) {
+  for await (const delta of deltas) {
     if (head === undefined) {
       yield delta
       continue

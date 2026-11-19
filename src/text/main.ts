@@ -2,9 +2,12 @@ import { layoutNextLine, prepareWithSegments, type PreparedTextWithSegments } fr
 import "@fontsource-variable/jetbrains-mono/wght.css"
 import { $ } from "../dom.ts"
 import { centeredAt, type Point } from "../point.ts"
+import { createLisp } from "../lisp/lisp.ts"
+import shippedConfig from "../../config.scm?raw"
+import { configFile, isSafeMode } from "../repl/config-file.ts"
+import { createReplPanel } from "../repl/repl-panel.ts"
 import { createAttentionKnobs } from "./attention-knobs.ts"
 import { caretAt, isAhead, pointAt, type Caret, type TextMetrics } from "./caret.ts"
-import { simulatedSource } from "./completion.ts"
 import { createConnections } from "./connections.ts"
 import { makeDraggable } from "./drag.ts"
 import { createFutureKnobs } from "./future-knobs.ts"
@@ -13,20 +16,11 @@ import { createKeywordRelevance } from "./keyword-relevance.ts"
 import { layoutLines } from "./layout.ts"
 import { createLeftRail } from "./left-rail.ts"
 import { circleOf } from "./links.ts"
-import { liveAttention } from "./live-attention.ts"
-import { liveSource } from "./live-completion.ts"
-import { liveDimension } from "./live-dimension.ts"
-import { liveInfluence } from "./live-influence.ts"
+import { installHost } from "./lisp-host.ts"
+import { lispSources } from "./lisp-sources.ts"
 import { bindModeToggle } from "./live-mode.ts"
-import { liveRealization } from "./live-realization.ts"
-import { liveRelevance } from "./live-relevance.ts"
 import { createPointer, type Aim, type PointerTarget, type SelectionPreview, type Zone } from "./pointer.ts"
 import { wordSpans, type Span } from "./segments.ts"
-import { simulatedAttention } from "./simulated-attention.ts"
-import { simulatedDimension } from "./simulated-dimension.ts"
-import { simulatedInfluence } from "./simulated-influence.ts"
-import { simulatedRealization } from "./simulated-realization.ts"
-import { simulatedRelevance } from "./simulated-relevance.ts"
 import { isSoundOn, setSoundOn, startSound, type Sound } from "./sound/engine.ts"
 import { sounds } from "./sound/sounds.ts"
 import { showStatus } from "./status-line.ts"
@@ -57,6 +51,7 @@ const statusElement = $("#status")
 const soundToggle = $<HTMLButtonElement>("#sound-toggle")
 const modeToggle = $<HTMLButtonElement>("#mode-toggle")
 const extraLink = $<HTMLAnchorElement>("#extra-link")
+const replToggle = $<HTMLButtonElement>("#repl-toggle")
 const railElement = $("#rail")
 const style = getComputedStyle(element)
 await document.fonts.load(style.font)
@@ -64,13 +59,23 @@ await document.fonts.load(style.font)
 const measure = document.createElement("canvas").getContext("2d")!
 measure.font = style.font
 
-const isLive = new URLSearchParams(location.search).get("live") === "true"
-const stream = createTextStream(isLive ? liveSource : simulatedSource, render)
+const mode = bindModeToggle(modeToggle, $<HTMLDialogElement>("#live-keys"), restartSteering)
+const lisp = createLisp()
+installHost(lisp, mode.isLive)
+const sources = lispSources(lisp, mode.isLive)
+const config = configFile({ origin: "config.scm", shipped: shippedConfig })
+const repl = createReplPanel({ origin: config.origin, dialog: $<HTMLDialogElement>("#repl"), toggle: replToggle, lisp, save: config.save })
+await lisp.ready
+await repl.load(config.initial(), { isSafe: isSafeMode })
+import.meta.hot?.accept("../../config.scm?raw", (module) => module && repl.reloadFromDisk(module.default))
+lisp.onChange(restartSteering)
+
+const stream = createTextStream(sources.text, render)
 const rail = createLeftRail(railElement)
-const connections = createConnections({ source: isLive ? liveInfluence : simulatedInfluence, onChange: refreshRail })
-const relevance = createKeywordRelevance(isLive ? liveRelevance : simulatedRelevance, refreshRail)
+const connections = createConnections({ source: sources.influence, onChange: refreshRail })
+const relevance = createKeywordRelevance(sources.relevance, refreshRail)
 const attention = createAttentionKnobs({
-  source: isLive ? liveAttention : simulatedAttention,
+  source: sources.attention,
   textElement: element,
   knob: handle,
   linkPath: $<SVGPathElement>("#attention-links"),
@@ -89,8 +94,8 @@ const futureKnobs = createFutureKnobs({
   linkPath: $<SVGPathElement>("#future-links"),
   tunedLinkPath: $<SVGPathElement>("#future-tuned-link"),
   hud: $<SVGGElement>("#future-hud"),
-  source: isLive ? liveDimension : simulatedDimension,
-  realization: isLive ? liveRealization : simulatedRealization,
+  source: sources.dimension,
+  realization: sources.realization,
   textElement: element,
   context: () => ({ text: shownText, leads: attention.leads() }),
   onChange: invalidateFuture,
@@ -119,7 +124,6 @@ let didHold = false
 /** The previous drag point, for how fast the knob moves. */
 let lastDrag: { point: Point; at: number } | undefined
 
-bindModeToggle(modeToggle, $<HTMLDialogElement>("#live-keys"), isLive)
 startSound()
 showSoundToggle()
 soundToggle.addEventListener("click", () => {
@@ -238,6 +242,15 @@ function render() {
   report()
 }
 
+/**
+ * A definition, a declared dimension or the flight mode changed: the text past the knob came from the old behaviour, so it is cut and
+ * generated again, and a fan menu fetched under the old one is dropped.
+ */
+function restartSteering() {
+  futureKnobs.forgetPreload()
+  invalidateFuture()
+}
+
 /** The text after the knob was steered by the previous boxes and future knobs, so it is regenerated once they settle. */
 function invalidateFuture() {
   refreshRail()
@@ -287,7 +300,7 @@ function afterStreaming(request: () => void) {
 function regenerateFuture() {
   isFutureStale = false
   restCount = shownCount ?? 0
-  stream.regenerate(shownCount ?? 0, "steering changed", steering())
+  stream.regenerate(shownCount ?? 0, "steering changed", steering()).catch((error) => console.error(error))
 }
 
 function steering(): Steering {
@@ -349,6 +362,7 @@ function pointerTargets(): PointerTarget[] {
     })),
     { rects: [modeToggle.getBoundingClientRect()], pad: TRAY_PAD_PX, isHotOnHover: true, wake: modeToggle },
     { rects: [soundToggle.getBoundingClientRect()], pad: TRAY_PAD_PX, isHotOnHover: true, wake: soundToggle },
+    { rects: [replToggle.getBoundingClientRect()], pad: TRAY_PAD_PX, isHotOnHover: true, wake: replToggle },
     { rects: [extraLink.getBoundingClientRect()], pad: TRAY_PAD_PX, isHotOnHover: true, wake: extraLink },
   ]
 }

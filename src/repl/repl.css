@@ -1,0 +1,117 @@
+/* The Lisp pane: the page's Lisp file beside a REPL, docked above the tray; not modal, so the page keeps running while you edit. */
+#repl {
+  position: fixed;
+  inset: auto 0 var(--tray-height) 0;
+  z-index: 10;
+  width: auto;
+  max-width: none;
+  height: var(--repl-height);
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-top: var(--hair) solid var(--ink-4);
+  background: var(--bg);
+  color: var(--ink);
+  font-size: var(--text-size);
+  line-height: var(--line);
+
+  &[open] {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  section {
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    min-height: 0;
+
+    & + section {
+      border-left: var(--hair) solid var(--ink-5);
+    }
+  }
+  header {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--gap);
+    padding: 0 var(--gap);
+    border-bottom: var(--hair) solid var(--ink-5);
+    color: var(--ink-3);
+    font-size: var(--numeral-size);
+    white-space: nowrap;
+    overflow: hidden;
+
+    b {
+      font-weight: inherit;
+      color: var(--ink);
+    }
+    [data-dirty] {
+      color: var(--hot);
+    }
+  }
+  textarea {
+    min-height: 0;
+    padding: var(--gap);
+    border: none;
+    outline: none;
+    resize: none;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    line-height: inherit;
+    tab-size: 2;
+
+    &::selection {
+      background: var(--hot-wash);
+    }
+  }
+  [data-input] {
+    border-top: var(--hair) solid var(--ink-5);
+    field-sizing: content;
+    max-height: 12lh;
+  }
+  [data-transcript] {
+    overflow-y: auto;
+    padding: var(--gap);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+
+    div {
+      color: var(--ink-2);
+    }
+    [data-kind="input"] {
+      color: var(--ink);
+      &::before {
+        content: "> ";
+        color: var(--ink-3);
+      }
+    }
+    [data-kind="value"] {
+      color: var(--ink);
+      &::before {
+        content: "=> ";
+        color: var(--ink-3);
+      }
+    }
+    [data-kind="info"] {
+      color: var(--ink-3);
+    }
+    [data-kind="warning"] {
+      color: var(--ink-2);
+      &::before {
+        content: "warning: ";
+        color: var(--hot);
+      }
+    }
+    [data-kind="error"] {
+      color: var(--hot);
+    }
+    button {
+      padding: 0;
+      border: none;
+      background: none;
+      color: var(--ink-3);
+      font: inherit;
+      text-decoration: underline;
+      cursor: pointer;
+    }
+  }
+}

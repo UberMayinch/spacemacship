@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>Spaceship</title>
+    <title>Spacemacship</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🕹️</text></svg>" />
     <style>
       @property --fill {
@@ -54,6 +54,7 @@
         --dimmed: 0.3;
         /* The ruler beside the column: one row per line, each this tall like the text. */
         --rail-width: 144px;
+        --repl-height: 42vh;
         scrollbar-gutter: stable;
         background: var(--bg);
         color: var(--ink);
@@ -604,6 +605,8 @@
       }
       #mode-toggle,
       #sound-toggle,
+      #repl-toggle,
+      #workspace-link,
       #extra-link {
         padding: 0 var(--gap);
         border: none;
@@ -641,11 +644,15 @@
           color: var(--hot);
         }
       }
+      #workspace-link,
       #extra-link {
         text-decoration: none;
       }
       #sound-toggle[aria-pressed="false"] {
         color: var(--ink-4);
+      }
+      #repl-toggle[aria-pressed="true"] b {
+        color: var(--hot);
       }
       /* Asks for the API keys each time live mode is entered. */
       #live-keys {
@@ -709,8 +716,8 @@
        * and a steering vector while a press pulls the main knob. The OS pointer is hidden once it takes over.
        */
       /* A modal dialog sits above the page's pointer, so the system one returns while it is open. */
-      html[data-cursor="custom"]:not(:has(dialog:modal)),
-      html[data-cursor="custom"]:not(:has(dialog:modal)) * {
+      html[data-cursor="custom"]:not(:has(dialog:modal, #repl:hover)),
+      html[data-cursor="custom"]:not(:has(dialog:modal, #repl:hover)) * {
         cursor: none !important;
       }
       #cursor {
@@ -723,8 +730,12 @@
         overflow: hidden;
         pointer-events: none;
 
-        html:is(:not([data-cursor="custom"]), :has(dialog:modal)) & {
+        html:is(:not([data-cursor="custom"]), :has(dialog:modal, #repl:hover)) & {
           display: none;
+        }
+        /* The hairlines stop at the Lisp pane, which keeps the system pointer. */
+        html:has(#repl[open]) & {
+          bottom: calc(var(--repl-height) + var(--tray-height));
         }
         /* orange while the hand changes something: dragging, or pulling the knob */
         &[data-live] {
@@ -872,8 +883,35 @@
       <button id="mode-toggle" type="button" aria-pressed="false" aria-label="flight mode">mode<b>sim</b></button>
       <output id="status" aria-live="off"></output>
       <button id="sound-toggle" type="button" aria-pressed="true" aria-label="sound">♪<b>on</b></button>
+      <button id="repl-toggle" type="button" aria-pressed="false" aria-label="lisp pane, ctrl+backtick">λ<b>lisp</b></button>
+      <a id="workspace-link" href="workspace.html">workspace</a>
       <a id="extra-link" href="extra/style-1.html">extra</a>
     </footer>
+    <dialog id="repl" aria-label="lisp" closedby="none">
+      <section>
+        <header>
+          <span><b>config.scm</b> <span data-dirty hidden>●</span></span>
+          <span>ctrl+enter form · ctrl+shift+enter buffer · ctrl+s save</span>
+        </header>
+        <textarea data-buffer spellcheck="false" autocomplete="off" autocapitalize="off" aria-label="config.scm"></textarea>
+      </section>
+      <section>
+        <header>
+          <span><b>*repl*</b></span>
+          <span>enter eval · ctrl+g cancel · ctrl+` close</span>
+        </header>
+        <output data-transcript aria-live="polite"></output>
+        <textarea
+          data-input
+          rows="1"
+          spellcheck="false"
+          autocomplete="off"
+          autocapitalize="off"
+          aria-label="lisp input"
+          placeholder="(describe 'dimension-menu)"
+        ></textarea>
+      </section>
+    </dialog>
     <dialog id="live-keys" aria-labelledby="live-keys-title" aria-describedby="live-keys-note" closedby="closerequest">
       <form method="dialog" autocomplete="off">
         <h2 id="live-keys-title">launch</h2>

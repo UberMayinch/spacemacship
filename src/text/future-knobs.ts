@@ -125,7 +125,7 @@ export function createFutureKnobs({
   let axis = 0
   let story: StoryLayout = { content: "", text: "", combined: "", sentences: [] }
 
-  return { preload, spawn, clear, count: () => knobs.length, pinnedCount: () => knobs.filter((knob) => knob.pinned).length, follow, controls }
+  return { preload, forgetPreload, spawn, clear, count: () => knobs.length, pinnedCount: () => knobs.filter((knob) => knob.pinned).length, follow, controls }
 
   /** Takes the text as the main knob or the generator changed it: updates each tracking knob's confidence, pins those realized, and removes pinned ones the main knob moved back past. */
   function follow(next: StoryLayout) {
@@ -163,6 +163,12 @@ export function createFutureKnobs({
     menu.dimensions.then((dimensions) => {
       if (!dimensions && preloaded === menu) preloaded = undefined
     })
+  }
+
+  /** Drops a menu fetched before the dimensions or their source changed, so the next fan asks again. */
+  function forgetPreload() {
+    preloaded?.controller.abort()
+    preloaded = undefined
   }
 
   /** Adds a knob at `point` and hands it the pressed pointer, so it follows the pointer until release drops it. */

@@ -31,3 +31,6 @@ token-usage.log
 
 # written by scripts/capture
 .capture
+
+# written by the kernel process (npm run kernel)
+.kernel-token
